@@ -1,0 +1,10 @@
+[package]
+name = "pokedex"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = "1.0.97"
+iced = "0.13.1"
+sqlx = {version = "0.8.3", features = ["sqlite", "runtime-tokio", "tls-native-tls"]}
+tokio = { version = "1.44.1", features = ["full"]}
