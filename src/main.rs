@@ -22,42 +22,83 @@ struct Move {
     move_type: String,
 }
 
+impl Pokemon {
+    pub fn from(name: String, moves: Vec<Move>, abilities: Vec<Ability>) -> Pokemon {
+        Pokemon {
+            name,
+            moves,
+            abilities,
+        }
+    }
+}
+
+impl Ability {
+    pub fn from(name: String) -> Ability {
+        Ability { name }
+    }
+}
+
+impl Move {
+    pub fn from(
+        name: String,
+        base_power: Option<i64>,
+        generation: i64,
+        pp: Option<i64>,
+        accuracy: Option<i64>,
+        move_type: String,
+    ) -> Move {
+        Move {
+            name,
+            base_power,
+            generation,
+            pp,
+            accuracy,
+            move_type,
+        }
+    }
+}
+
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> anyhow::Result<()> {
     let pool = SqlitePool::connect("pokedex.sqlite").await?;
-    let name = String::from("ivysaur");
+    let name = String::from("pik");
 
-    let pokemon = get_pokemon(name, &pool).await;
-    dbg!(pokemon);
+    let pokemon = get_pokemons(name, &pool).await;
     Ok(())
 }
 
-async fn get_pokemon(name: String, pool: &Pool<Sqlite>) -> Option<Pokemon> {
-    let mut abilities: Vec<Ability> = Vec::new();
-    let mut moves: Vec<Move> = Vec::new();
+async fn get_pokemons(name: String, pool: &Pool<Sqlite>) -> Option<Vec<Pokemon>> {
+    let mut new_name = String::from("%");
+    new_name.push_str(&name);
+    new_name.push_str("%");
+    let mut abilities: Vec<Vec<Ability>> = Vec::new();
+    let mut moves: Vec<Vec<Move>> = Vec::new();
 
     let pokemon_id = match sqlx::query!(
         "
             SELECT
-            pokemon.id
+            pokemon.id,
+            pokemon.identifier
             FROM
             pokemon
             WHERE
-            pokemon.identifier = ?
+            pokemon.identifier LIKE ?
         ",
-        name
+        new_name
     )
-    .fetch_one(pool)
+    .fetch_all(pool)
     .await
     {
-        Ok(res) => res.id,
+        Ok(res) => res,
         Err(_) => {
             return None;
         }
     };
 
-    for ability in sqlx::query!(
-        "
+    for p_id in pokemon_id.iter() {
+        abilities.push(
+            sqlx::query!(
+                "
         SELECT
         abilities.identifier
         FROM
@@ -69,55 +110,62 @@ async fn get_pokemon(name: String, pool: &Pool<Sqlite>) -> Option<Pokemon> {
         WHERE
         pokemon.id = ?
         ",
-        pokemon_id
-    )
-    .fetch_all(pool)
-    .await
-    .expect("Ability not found")
-    {
-        abilities.push(Ability {
-            name: ability.identifier,
-        });
+                p_id.id
+            )
+            .fetch_all(pool)
+            .await
+            .expect("Abilities not found for pokemon id {p_id.id}")
+            .into_iter()
+            .map(|rec| Ability::from(rec.identifier))
+            .collect::<Vec<Ability>>(),
+        );
+
+        moves.push(
+            sqlx::query!(
+                "
+            SELECT
+            moves.identifier AS move_name,
+            moves.power AS base_power,
+            moves.generation_id AS generation,
+            moves.pp AS pp,
+            moves.accuracy AS move_accuracy,
+            types.identifier AS move_type
+            FROM
+            pokemon
+            INNER JOIN
+            pokemon_moves ON pokemon.id = pokemon_moves.pokemon_id
+            INNER JOIN
+            moves ON pokemon_moves.move_id = moves.id
+            INNER JOIN
+            types ON moves.type_id = types.id
+            WHERE pokemon.id = ?
+            ",
+                p_id.id
+            )
+            .fetch_all(pool)
+            .await
+            .expect("Moves not found")
+            .into_iter()
+            .map(|p_moves| {
+                Move::from(
+                    p_moves.move_name,
+                    p_moves.base_power,
+                    p_moves.generation,
+                    p_moves.pp,
+                    p_moves.move_accuracy,
+                    p_moves.move_type,
+                )
+            })
+            .collect::<Vec<Move>>(),
+        );
     }
 
-    for pokemon_move in sqlx::query!(
-        "
-        SELECT
-        moves.identifier AS move_name,
-        moves.power AS base_power,
-        moves.generation_id AS generation,
-        moves.pp AS pp,
-        moves.accuracy AS move_accuracy,
-        types.identifier AS move_type
-        FROM
-        pokemon
-        INNER JOIN
-        pokemon_moves ON pokemon.id = pokemon_moves.pokemon_id
-        INNER JOIN
-        moves ON pokemon_moves.move_id = moves.id
-        INNER JOIN
-        types ON moves.type_id = types.id
-        WHERE pokemon.id = ?
-        ",
+    Some(
         pokemon_id
+            .into_iter()
+            .zip(abilities.into_iter())
+            .zip(moves.into_iter())
+            .map(|((p_id, abi), p_mov)| Pokemon::from(p_id.identifier, p_mov, abi))
+            .collect::<Vec<Pokemon>>(),
     )
-    .fetch_all(pool)
-    .await
-    .expect("Moves not found")
-    {
-        moves.push(Move {
-            name: pokemon_move.move_name,
-            base_power: pokemon_move.base_power,
-            generation: pokemon_move.generation,
-            pp: pokemon_move.pp,
-            accuracy: pokemon_move.move_accuracy,
-            move_type: pokemon_move.move_type,
-        });
-    }
-
-    Some(Pokemon {
-        name,
-        moves,
-        abilities,
-    })
 }
