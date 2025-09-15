@@ -1,10 +1,12 @@
 use iced::{
-    Element, Task,
-    widget::{Column, button, text_input},
+    Alignment, Element,
+    Length::Fill,
+    Renderer, Task, Theme,
+    widget::{Column, Row, Rule, Themer, button, row, scrollable, text, text_input},
 };
 use sqlx::{Pool, Sqlite};
 
-use crate::pokemon::{Pokemons, get_pokemons};
+use crate::pokemon::{Ability, Pokemons, get_pokemons};
 
 #[derive(Clone, Debug)]
 pub enum Message {
@@ -16,7 +18,7 @@ pub enum Message {
 #[derive(Clone, Debug)]
 pub enum AppState {
     Initial,
-    SinglePokemon,
+    SinglePokemon(usize),
 }
 
 #[derive(Debug)]
@@ -53,32 +55,85 @@ pub fn update(state: &mut State, message: Message) -> Task<Message> {
         Message::NameChanged(name) => {
             state.app_state = AppState::Initial;
             state.name = name;
-            state.search_pokemons()
+            if !state.name.is_empty() {
+                return state.search_pokemons();
+            }
+            state.pokemons = Default::default();
         }
         Message::PokemonsFound(pokemons) => match pokemons {
             Some(pkm) => {
                 state.pokemons = pkm;
-                Task::none()
             }
             None => {
                 state.pokemons = Pokemons::default();
-                Task::none()
             }
         },
-        Message::PokemonSelected(_index) => {
-            state.app_state = AppState::SinglePokemon;
-            Task::none()
+        Message::PokemonSelected(index) => {
+            state.app_state = AppState::SinglePokemon(index);
         }
     }
+    return Task::none();
 }
 
 pub fn view(state: &State) -> Element<'_, Message> {
     let mut to_return = Column::new();
+
     to_return =
         to_return.push(text_input("Type pokemon name", &state.name).on_input(Message::NameChanged));
-    for (index, pokemon) in state.pokemons.pokemons.iter().enumerate() {
-        to_return =
-            to_return.push(button(pokemon.name.as_str()).on_press(Message::PokemonSelected(index)));
+    // to_return = to_return.align_x(Alignment::Center);
+    match state.app_state {
+        AppState::Initial => {
+            for (index, pokemon) in state.pokemons.pokemons.iter().enumerate() {
+                let pokemon_name = text(pokemon.name.as_str())
+                    .width(150)
+                    .align_x(Alignment::Start);
+
+                let abilities = compose_ability(&pokemon.abilities).width(260);
+
+                let row = row![pokemon_name, abilities];
+                to_return = to_return.push(button(row).on_press(Message::PokemonSelected(index)));
+                to_return = to_return.push(Rule::horizontal(3));
+            }
+        }
+        AppState::SinglePokemon(_idx) => {}
     }
-    to_return.into()
+    scrollable(to_return).height(Fill).into()
+    // to_return.into()
+}
+
+pub fn compose_ability(abilitites: &Vec<Ability>) -> Row<'_, Message, Theme, Renderer> {
+    let mut ability_row: Row<'_, Message, Theme, Renderer> = Row::new();
+    if abilitites.len() <= 2 {
+        for ability in abilitites.iter() {
+            ability_row = ability_row.push(
+                text(ability.name.clone().to_uppercase())
+                    .width(130)
+                    .size(12)
+                    .align_x(Alignment::Center),
+            );
+            ability_row = ability_row.spacing(10);
+        }
+        return ability_row;
+    }
+    let mut ability_column = Column::new();
+    for ability in abilitites.iter().take(2) {
+        ability_column = ability_column.push(
+            text(ability.name.clone().to_uppercase())
+                .width(130)
+                .size(12)
+                .align_x(Alignment::Center),
+        );
+    }
+    ability_row = ability_row.push(ability_column);
+    let mut ability_column = Column::new();
+    for ability in abilitites.iter().skip(2) {
+        ability_column = ability_column.push(
+            text(ability.name.clone().to_uppercase())
+                .width(130)
+                .size(12)
+                .align_x(Alignment::Center),
+        );
+    }
+    ability_row = ability_row.push(ability_column);
+    return ability_row;
 }
