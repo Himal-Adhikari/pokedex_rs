@@ -2,11 +2,13 @@ use iced::{
     Alignment, Element,
     Length::Fill,
     Renderer, Task, Theme,
-    widget::{Column, Row, Rule, Themer, button, row, scrollable, text, text_input},
+    widget::{Column, Row, Rule, button, row, scrollable, text, text_input},
 };
 use sqlx::{Pool, Sqlite};
 
-use crate::pokemon::{Ability, Pokemons, get_pokemons};
+use crate::pokemon::{Ability, Pokemons, Stats, get_pokemons};
+
+const HEIGHT: u16 = 50;
 
 #[derive(Clone, Debug)]
 pub enum Message {
@@ -80,17 +82,19 @@ pub fn view(state: &State) -> Element<'_, Message> {
 
     to_return =
         to_return.push(text_input("Type pokemon name", &state.name).on_input(Message::NameChanged));
-    // to_return = to_return.align_x(Alignment::Center);
     match state.app_state {
         AppState::Initial => {
             for (index, pokemon) in state.pokemons.pokemons.iter().enumerate() {
                 let pokemon_name = text(pokemon.name.as_str())
-                    .width(150)
-                    .align_x(Alignment::Start);
+                    .width(200)
+                    .height(HEIGHT)
+                    .align_x(Alignment::Start)
+                    .align_y(Alignment::Center);
 
                 let abilities = compose_ability(&pokemon.abilities).width(260);
+                let stats = compose_stats(&pokemon.stats);
 
-                let row = row![pokemon_name, abilities];
+                let row = row![pokemon_name, abilities, stats];
                 to_return = to_return.push(button(row).on_press(Message::PokemonSelected(index)));
                 to_return = to_return.push(Rule::horizontal(3));
             }
@@ -98,20 +102,20 @@ pub fn view(state: &State) -> Element<'_, Message> {
         AppState::SinglePokemon(_idx) => {}
     }
     scrollable(to_return).height(Fill).into()
-    // to_return.into()
 }
 
 pub fn compose_ability(abilitites: &Vec<Ability>) -> Row<'_, Message, Theme, Renderer> {
     let mut ability_row: Row<'_, Message, Theme, Renderer> = Row::new();
+    ability_row = ability_row.spacing(10);
     if abilitites.len() <= 2 {
         for ability in abilitites.iter() {
             ability_row = ability_row.push(
                 text(ability.name.clone().to_uppercase())
-                    .width(130)
+                    .width(100)
+                    .height(HEIGHT)
                     .size(12)
-                    .align_x(Alignment::Center),
+                    .center(),
             );
-            ability_row = ability_row.spacing(10);
         }
         return ability_row;
     }
@@ -119,9 +123,10 @@ pub fn compose_ability(abilitites: &Vec<Ability>) -> Row<'_, Message, Theme, Ren
     for ability in abilitites.iter().take(2) {
         ability_column = ability_column.push(
             text(ability.name.clone().to_uppercase())
-                .width(130)
+                .width(100)
+                .height(HEIGHT / 2)
                 .size(12)
-                .align_x(Alignment::Center),
+                .center(),
         );
     }
     ability_row = ability_row.push(ability_column);
@@ -129,11 +134,40 @@ pub fn compose_ability(abilitites: &Vec<Ability>) -> Row<'_, Message, Theme, Ren
     for ability in abilitites.iter().skip(2) {
         ability_column = ability_column.push(
             text(ability.name.clone().to_uppercase())
-                .width(130)
+                .width(100)
+                .height(HEIGHT)
                 .size(12)
-                .align_x(Alignment::Center),
+                .center(),
         );
     }
     ability_row = ability_row.push(ability_column);
     return ability_row;
+}
+
+pub fn compose_stats(stats: &Stats) -> Row<'_, Message, Theme, Renderer> {
+    let mut stats_row: Row<'_, Message, Theme, Renderer> = Row::new();
+    for (i, &val) in stats.stats.iter().enumerate() {
+        let mut indiv_column = Column::new().width(HEIGHT);
+        let txt = match i {
+            0 => text("HP"),
+            1 => text("Atk"),
+            2 => text("Def"),
+            3 => text("SpA"),
+            4 => text("SpD"),
+            5 => text("Spe"),
+            _ => unreachable!(),
+        };
+        indiv_column = indiv_column.push(txt.height(HEIGHT / 2).center());
+        indiv_column = indiv_column.push(text(val).height(HEIGHT / 2).center());
+        stats_row = stats_row.push(indiv_column);
+    }
+    let mut indiv_column = Column::new().width(HEIGHT);
+    indiv_column = indiv_column.push(text("BST").height(HEIGHT / 2).center());
+    indiv_column = indiv_column.push(
+        text(stats.stats.iter().sum::<i64>())
+            .height(HEIGHT / 2)
+            .center(),
+    );
+    stats_row = stats_row.push(indiv_column);
+    stats_row
 }

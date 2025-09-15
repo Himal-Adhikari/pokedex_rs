@@ -5,11 +5,23 @@ pub struct Pokemon {
     pub name: String,
     pub moves: Vec<Move>,
     pub abilities: Vec<Ability>,
+    pub stats: Stats,
 }
 
 #[derive(Debug, Clone)]
 pub struct Ability {
     pub name: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct Stats {
+    pub stats: [i64; 6],
+}
+
+impl Default for Stats {
+    fn default() -> Self {
+        Stats { stats: { [0; 6] } }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -34,11 +46,12 @@ impl Pokemons {
 }
 
 impl Pokemon {
-    pub fn from(name: String, moves: Vec<Move>, abilities: Vec<Ability>) -> Self {
+    pub fn from(name: String, moves: Vec<Move>, abilities: Vec<Ability>, stats: Stats) -> Self {
         Pokemon {
             name,
             moves,
             abilities,
+            stats,
         }
     }
 }
@@ -81,6 +94,7 @@ pub async fn get_pokemons(name: impl Into<String>, pool: Pool<Sqlite>) -> Option
 
     let mut abilities: Vec<Vec<Ability>> = Vec::new();
     let mut moves: Vec<Vec<Move>> = Vec::new();
+    let mut stats: Vec<Stats> = Vec::new();
 
     let pokemon_id = match sqlx::query!(
         "
@@ -129,6 +143,30 @@ pub async fn get_pokemons(name: impl Into<String>, pool: Pool<Sqlite>) -> Option
             .collect::<Vec<Ability>>(),
         );
 
+        let mut stat = Stats::default();
+        for record in sqlx::query!(
+            "
+        SELECT
+        pokemon_stats.base_stat,
+        pokemon_stats.stat_id
+        FROM
+        pokemon
+        INNER JOIN
+        pokemon_stats ON pokemon.id = pokemon_stats.pokemon_id
+        WHERE
+        pokemon.id = ?
+        ",
+            p_id.id
+        )
+        .fetch_all(pool)
+        .await
+        .expect("Stats not found for pokemon id {p_id.id}")
+        .into_iter()
+        {
+            stat.stats[record.stat_id as usize - 1] = record.base_stat;
+        }
+        stats.push(stat);
+
         moves.push(
             sqlx::query!(
                 "
@@ -174,7 +212,10 @@ pub async fn get_pokemons(name: impl Into<String>, pool: Pool<Sqlite>) -> Option
             .into_iter()
             .zip(abilities.into_iter())
             .zip(moves.into_iter())
-            .map(|((p_id, abi), p_mov)| Pokemon::from(p_id.identifier, p_mov, abi))
+            .zip(stats.into_iter())
+            .map(|(((p_id, p_abi), p_mov), p_stats)| {
+                Pokemon::from(p_id.identifier, p_mov, p_abi, p_stats)
+            })
             .collect::<Vec<Pokemon>>(),
     ))
 }
