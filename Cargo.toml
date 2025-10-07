@@ -5,6 +5,6 @@ edition = "2024"
 
 [dependencies]
 anyhow = "1.0.97"
-iced = {version = "0.13.1", features = ["tokio", "debug"]}
+iced = { git = "https://github.com/iced-rs/iced", rev = "0a34496c793fd87c235e764317351a0aacd4f6d1", features = ["tokio", "debug"]}
 sqlx = {version = "0.8.3", features = ["sqlite", "runtime-tokio", "tls-native-tls"]}
 tokio = { version = "1.44.1", features = ["full"]}

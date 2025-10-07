@@ -2,13 +2,13 @@ use iced::{
     Alignment, Element,
     Length::Fill,
     Renderer, Task, Theme,
-    widget::{Column, Row, Rule, button, row, scrollable, text, text_input},
+    widget::{Column, Row, button, row, rule, scrollable, text, text_input},
 };
 use sqlx::{Pool, Sqlite};
 
 use crate::pokemon::{Ability, Pokemons, Stats, get_pokemons};
 
-const HEIGHT: u16 = 50;
+const HEIGHT: u32 = 50;
 
 #[derive(Clone, Debug)]
 pub enum Message {
@@ -32,7 +32,11 @@ pub struct State {
 }
 
 impl State {
-    pub fn with_pool(pool: Pool<Sqlite>) -> (Self, Task<Message>) {
+    pub fn with_pool() -> (Self, Task<Message>) {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let fut = sqlx::SqlitePool::connect("pokedex.sqlite");
+
+        let pool = rt.block_on(fut).unwrap();
         (
             State {
                 name: Default::default(),
@@ -96,7 +100,7 @@ pub fn view(state: &State) -> Element<'_, Message> {
 
                 let row = row![pokemon_name, abilities, stats];
                 to_return = to_return.push(button(row).on_press(Message::PokemonSelected(index)));
-                to_return = to_return.push(Rule::horizontal(3));
+                to_return = to_return.push(rule::horizontal(3));
             }
         }
         AppState::SinglePokemon(_idx) => {}

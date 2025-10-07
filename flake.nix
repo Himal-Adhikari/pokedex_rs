@@ -40,6 +40,7 @@
         clippy
         rustfmt
         rust-analyzer
+        bacon
       ];
       nativeBuildInputs = [ pkgs.pkg-config ];
 
