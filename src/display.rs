@@ -1,8 +1,10 @@
+use std::fmt::Debug;
+
 use iced::{
-    Alignment, Element,
+    Alignment, Background, Color, Element,
     Length::Fill,
     Renderer, Task, Theme,
-    widget::{Column, Row, button, row, rule, scrollable, text, text_input},
+    widget::{Button, Column, Row, button, row, rule, scrollable, text, text_input},
 };
 use sqlx::{Pool, Sqlite};
 
@@ -34,9 +36,10 @@ pub struct State {
 impl State {
     pub fn with_pool() -> (Self, Task<Message>) {
         let rt = tokio::runtime::Runtime::new().unwrap();
-        let fut = sqlx::SqlitePool::connect("pokedex.sqlite");
+        let pool = rt
+            .block_on(sqlx::SqlitePool::connect("pokedex.sqlite"))
+            .unwrap();
 
-        let pool = rt.block_on(fut).unwrap();
         (
             State {
                 name: Default::default(),
@@ -81,6 +84,12 @@ pub fn update(state: &mut State, message: Message) -> Task<Message> {
     return Task::none();
 }
 
+pub fn theme(_state: &State) -> Theme {
+    // Theme::Nord
+    Theme::Light
+    // Theme::Dark
+}
+
 pub fn view(state: &State) -> Element<'_, Message> {
     let mut to_return = Column::new();
 
@@ -99,8 +108,18 @@ pub fn view(state: &State) -> Element<'_, Message> {
                 let stats = compose_stats(&pokemon.stats);
 
                 let row = row![pokemon_name, abilities, stats];
-                to_return = to_return.push(button(row).on_press(Message::PokemonSelected(index)));
-                to_return = to_return.push(rule::horizontal(3));
+                let button: Button<'_, Message> = button(row)
+                    .style(|theme: &Theme, status| {
+                        let palette = theme.palette();
+                        match status {
+                            button::Status::Hovered | button::Status::Pressed => {
+                                button::Style::default().with_background(palette.danger.inverse())
+                            }
+                            _ => button::Style::default().with_background(palette.background),
+                        }
+                    })
+                    .into();
+                to_return = to_return.push(button.on_press(Message::PokemonSelected(index)));
             }
         }
         AppState::SinglePokemon(_idx) => {}

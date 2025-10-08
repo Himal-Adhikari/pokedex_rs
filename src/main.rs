@@ -7,6 +7,7 @@ use iced::Font;
 fn main() -> anyhow::Result<()> {
     iced::application(State::with_pool, update, view)
         .default_font(Font::MONOSPACE)
+        .theme(theme)
         .run()?;
     Ok(())
 }
