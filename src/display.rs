@@ -1,10 +1,10 @@
 use std::fmt::Debug;
 
 use iced::{
-    Alignment, Background, Color, Element,
+    Alignment, Element,
     Length::Fill,
     Renderer, Task, Theme,
-    widget::{Button, Column, Row, button, row, rule, scrollable, text, text_input},
+    widget::{Button, Column, Row, button, row, scrollable, text, text_input},
 };
 use sqlx::{Pool, Sqlite};
 
@@ -86,8 +86,9 @@ pub fn update(state: &mut State, message: Message) -> Task<Message> {
 
 pub fn theme(_state: &State) -> Theme {
     // Theme::Nord
-    Theme::Light
+    // Theme::Light
     // Theme::Dark
+    Theme::CatppuccinMacchiato
 }
 
 pub fn view(state: &State) -> Element<'_, Message> {
@@ -111,12 +112,14 @@ pub fn view(state: &State) -> Element<'_, Message> {
                 let button: Button<'_, Message> = button(row)
                     .style(|theme: &Theme, status| {
                         let palette = theme.palette();
-                        match status {
+                        let mut bstyle = match status {
                             button::Status::Hovered | button::Status::Pressed => {
                                 button::Style::default().with_background(palette.danger.inverse())
                             }
                             _ => button::Style::default().with_background(palette.background),
-                        }
+                        };
+                        bstyle.text_color = palette.background.inverse();
+                        bstyle
                     })
                     .into();
                 to_return = to_return.push(button.on_press(Message::PokemonSelected(index)));
