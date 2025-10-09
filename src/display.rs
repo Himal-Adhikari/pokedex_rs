@@ -4,11 +4,11 @@ use iced::{
     Alignment, Element,
     Length::Fill,
     Renderer, Task, Theme,
-    widget::{Button, Column, Row, button, row, scrollable, text, text_input},
+    widget::{Button, Column, Row, button, row, rule, scrollable, text, text_input},
 };
 use sqlx::{Pool, Sqlite};
 
-use crate::pokemon::{Ability, Pokemons, Stats, get_pokemons};
+use crate::pokemon::{Ability, Pokemon, Pokemons, Stats, get_pokemons};
 
 const HEIGHT: u32 = 50;
 
@@ -19,18 +19,12 @@ pub enum Message {
     PokemonSelected(usize),
 }
 
-#[derive(Clone, Debug)]
-pub enum AppState {
-    Initial,
-    SinglePokemon(usize),
-}
-
 #[derive(Debug)]
 pub struct State {
     name: String,
     pokemons: Pokemons,
     pool: Pool<Sqlite>,
-    app_state: AppState,
+    selected_pokemon: Option<Pokemon>,
 }
 
 impl State {
@@ -44,7 +38,7 @@ impl State {
             State {
                 name: Default::default(),
                 pokemons: Default::default(),
-                app_state: AppState::Initial,
+                selected_pokemon: None,
                 pool,
             },
             Task::none(),
@@ -62,7 +56,6 @@ impl State {
 pub fn update(state: &mut State, message: Message) -> Task<Message> {
     match message {
         Message::NameChanged(name) => {
-            state.app_state = AppState::Initial;
             state.name = name;
             if !state.name.is_empty() {
                 return state.search_pokemons();
@@ -78,7 +71,7 @@ pub fn update(state: &mut State, message: Message) -> Task<Message> {
             }
         },
         Message::PokemonSelected(index) => {
-            state.app_state = AppState::SinglePokemon(index);
+            state.selected_pokemon = Some(state.pokemons.pokemons[index].clone());
         }
     }
     return Task::none();
@@ -96,38 +89,80 @@ pub fn view(state: &State) -> Element<'_, Message> {
 
     to_return =
         to_return.push(text_input("Type pokemon name", &state.name).on_input(Message::NameChanged));
-    match state.app_state {
-        AppState::Initial => {
-            for (index, pokemon) in state.pokemons.pokemons.iter().enumerate() {
-                let pokemon_name = text(pokemon.name.as_str())
-                    .width(200)
-                    .height(HEIGHT)
-                    .align_x(Alignment::Start)
-                    .align_y(Alignment::Center);
-
-                let abilities = compose_ability(&pokemon.abilities).width(260);
-                let stats = compose_stats(&pokemon.stats);
-
-                let row = row![pokemon_name, abilities, stats];
-                let button: Button<'_, Message> = button(row)
-                    .style(|theme: &Theme, status| {
-                        let palette = theme.palette();
-                        let mut bstyle = match status {
-                            button::Status::Hovered | button::Status::Pressed => {
-                                button::Style::default().with_background(palette.danger.inverse())
-                            }
-                            _ => button::Style::default().with_background(palette.background),
-                        };
-                        bstyle.text_color = palette.background.inverse();
-                        bstyle
-                    })
-                    .into();
-                to_return = to_return.push(button.on_press(Message::PokemonSelected(index)));
-            }
-        }
-        AppState::SinglePokemon(_idx) => {}
+    if let Some(pokemon) = &state.selected_pokemon {
+        to_return = to_return.push(default_app_render(&state.pokemons));
+        return row![
+            scrollable(to_return),
+            rule::vertical(5),
+            scrollable(pokemon_sidebar_view(pokemon))
+        ]
+        .into();
+    } else {
+        to_return = to_return.push(default_app_render(&state.pokemons));
+        return scrollable(to_return).height(Fill).into();
     }
-    scrollable(to_return).height(Fill).into()
+}
+
+pub fn default_app_render(pokemons: &Pokemons) -> Column<'_, Message> {
+    let mut to_return = Column::new();
+    for (index, pokemon) in pokemons.pokemons.iter().enumerate() {
+        let pokemon_name = text(pokemon.name.as_str())
+            .width(200)
+            .height(HEIGHT)
+            .align_x(Alignment::Start)
+            .align_y(Alignment::Center);
+
+        let abilities = compose_ability(&pokemon.abilities).width(260);
+        let stats = compose_stats(&pokemon.stats);
+
+        let row = row![pokemon_name, abilities, stats];
+        let button: Button<'_, Message> = button(row)
+            .style(|theme: &Theme, status| {
+                let palette = theme.palette();
+                let mut bstyle = match status {
+                    button::Status::Hovered | button::Status::Pressed => {
+                        button::Style::default().with_background(palette.danger.inverse())
+                    }
+                    _ => button::Style::default().with_background(palette.background),
+                };
+                bstyle.text_color = palette.background.inverse();
+                bstyle
+            })
+            .into();
+        to_return = to_return.push(button.on_press(Message::PokemonSelected(index)));
+    }
+    return to_return;
+}
+
+pub fn pokemon_sidebar_view(pokemon: &Pokemon) -> Column<'_, Message> {
+    let mut to_return = Column::new();
+
+    to_return = to_return.push(text(pokemon.name.as_str()).size(40).width(Fill));
+
+    to_return = to_return.push(text("Abilities:"));
+    let mut abilities = Row::new();
+
+    let ability_num = pokemon.abilities.len();
+    abilities = abilities.push(text("    "));
+    for i in 0..ability_num {
+        let mut ability_name = pokemon.abilities[i].name.clone();
+        if i != ability_num - 1 {
+            ability_name.push_str(" | ");
+        }
+        abilities = abilities.push(text(ability_name));
+    }
+    to_return = to_return.push(abilities);
+
+    to_return = to_return.push(text("\nBase stats: "));
+
+    // 0 => text("HP"),
+    // 1 => text("Atk"),
+    // 2 => text("Def"),
+    // 3 => text("SpA"),
+    // 4 => text("SpD"),
+    // 5 => text("Spe"),
+
+    return to_return;
 }
 
 pub fn compose_ability(abilitites: &Vec<Ability>) -> Row<'_, Message, Theme, Renderer> {
