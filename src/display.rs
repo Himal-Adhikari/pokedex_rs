@@ -4,7 +4,10 @@ use iced::{
     Alignment, Color, Element,
     Length::Fill,
     Renderer, Task, Theme,
-    widget::{Button, Column, Row, button, container, row, rule, scrollable, text, text_input},
+    widget::{
+        Button, Column, Container, Row, Space, button, container, row, rule, scrollable, text,
+        text_input,
+    },
 };
 use sqlx::{Pool, Sqlite};
 
@@ -18,6 +21,12 @@ const GREEN_START_STAT: f32 = 0.0;
 const GREEN_STOP_STAT: f32 = 120.0;
 const RED_STOP_STAT: f32 = 60.0;
 const BLUE_START_STAT: f32 = 80.0;
+
+const MAX_MOVE_NAME_WIDTH: u32 = 160;
+const MAX_TYPE_NAME_WIDTH: u32 = 90;
+const BASE_POWER_WIDTH: u32 = 70;
+const ACCURACY_WIDTH: u32 = 70;
+const PP_WIDTH: u32 = 35;
 
 #[derive(Clone, Debug)]
 pub enum Message {
@@ -85,8 +94,8 @@ pub fn update(state: &mut State, message: Message) -> Task<Message> {
 }
 
 pub fn theme(_state: &State) -> Theme {
-    // Theme::Light
-    Theme::CatppuccinMacchiato
+    Theme::Light
+    // Theme::CatppuccinMacchiato
 }
 
 pub fn view(state: &State) -> Element<'_, Message> {
@@ -201,8 +210,104 @@ pub fn pokemon_sidebar_view(pokemon: &Pokemon) -> Column<'_, Message> {
         });
 
     to_return = to_return.push(base_stat_total_row);
+    to_return = to_return.push(text("Moves"));
+
+    for pokemon_move in pokemon.moves.iter() {
+        let mut move_row = Row::new().height(40);
+        move_row = move_row.push(text(pokemon_move.name.as_str()).width(MAX_MOVE_NAME_WIDTH));
+        move_row = move_row.push(
+            compose_type_container(pokemon_move.move_type.as_str()).width(MAX_TYPE_NAME_WIDTH),
+        );
+
+        let mut base_power_column = Column::new()
+            .width(BASE_POWER_WIDTH)
+            .align_x(Alignment::Center);
+
+        if let Some(move_power) = pokemon_move.base_power {
+            base_power_column = base_power_column
+                .push(text("Power"))
+                .push(text(move_power.to_string()));
+        }
+        move_row = move_row.push(base_power_column);
+
+        let mut accuracy_column = Column::new()
+            .width(ACCURACY_WIDTH)
+            .align_x(Alignment::Center);
+        move_row = move_row.push(Space::new().width(10));
+
+        if let Some(accuracy) = pokemon_move.accuracy {
+            accuracy_column = accuracy_column
+                .push(text("Accuracy"))
+                .push(text(accuracy.to_string()));
+        }
+        move_row = move_row.push(accuracy_column);
+
+        let mut pp_column = Column::new().width(PP_WIDTH).align_x(Alignment::Center);
+        move_row = move_row.push(Space::new().width(20));
+        if let Some(pp) = pokemon_move.pp {
+            pp_column = pp_column.push(text("PP")).push(text(pp.to_string()));
+        }
+        move_row = move_row.push(pp_column);
+
+        to_return = to_return.push(move_row);
+    }
 
     return to_return;
+}
+
+fn compose_type_container<'a>(typ: impl Into<String>) -> Container<'a, Message> {
+    let mut name: String = typ.into();
+    name = name.to_lowercase().trim().to_string();
+
+    match name.as_str() {
+        "normal" => container("NORMAL").style(|_theme| {
+            container::Style::default().background(Color::from_rgb8(170, 170, 153))
+        }),
+        "fire" => container("FIRE")
+            .style(|_theme| container::Style::default().background(Color::from_rgb8(255, 68, 34))),
+        "water" => container("WATER")
+            .style(|_theme| container::Style::default().background(Color::from_rgb8(51, 153, 255))),
+        "electric" => container("ELECTRIC")
+            .style(|_theme| container::Style::default().background(Color::from_rgb8(255, 204, 51))),
+        "grass" => container("GRASS")
+            .style(|_theme| container::Style::default().background(Color::from_rgb8(119, 204, 85))),
+        "ice" => container("ICE").style(|_theme| {
+            container::Style::default().background(Color::from_rgb8(102, 204, 255))
+        }),
+        "fighting" => container("FIGHTING")
+            .style(|_theme| container::Style::default().background(Color::from_rgb8(187, 85, 68))),
+        "poison" => container("POISON")
+            .style(|_theme| container::Style::default().background(Color::from_rgb8(170, 85, 153))),
+        "ground" => container("GROUND")
+            .style(|_theme| container::Style::default().background(Color::from_rgb8(221, 187, 85))),
+        "flying" => container("FLYING").style(|_theme| {
+            container::Style::default().background(Color::from_rgb8(136, 153, 255))
+        }),
+        "psychic" => container("PSYCHIC")
+            .style(|_theme| container::Style::default().background(Color::from_rgb8(255, 85, 153))),
+        "bug" => container("BUG")
+            .style(|_theme| container::Style::default().background(Color::from_rgb8(170, 187, 34))),
+        "rock" => container("ROCK").style(|_theme| {
+            container::Style::default().background(Color::from_rgb8(187, 170, 102))
+        }),
+        "ghost" => container("GHOST").style(|_theme| {
+            container::Style::default().background(Color::from_rgb8(102, 102, 187))
+        }),
+        "dragon" => container("DRAGON").style(|_theme| {
+            container::Style::default().background(Color::from_rgb8(119, 102, 238))
+        }),
+        "dark" => container("DARK")
+            .style(|_theme| container::Style::default().background(Color::from_rgb8(119, 85, 68))),
+        "steel" => container("STEEL").style(|_theme| {
+            container::Style::default().background(Color::from_rgb8(170, 170, 187))
+        }),
+        "fairy" => container("FAIRY").style(|_theme| {
+            container::Style::default().background(Color::from_rgb8(238, 153, 238))
+        }),
+        _ => unreachable!(),
+    }
+    .align_x(Alignment::Center)
+    .align_y(Alignment::Center)
 }
 
 pub fn compose_ability_main_view(abilitites: &Vec<Ability>) -> Row<'_, Message, Theme, Renderer> {
