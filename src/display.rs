@@ -1,16 +1,23 @@
 use std::fmt::Debug;
 
 use iced::{
-    Alignment, Element,
+    Alignment, Color, Element,
     Length::Fill,
     Renderer, Task, Theme,
-    widget::{Button, Column, Row, button, row, rule, scrollable, text, text_input},
+    widget::{Button, Column, Row, button, container, row, rule, scrollable, text, text_input},
 };
 use sqlx::{Pool, Sqlite};
 
 use crate::pokemon::{Ability, Pokemon, Pokemons, Stats, get_pokemons};
 
 const HEIGHT: u32 = 50;
+const MAX_BASE_STAT: f32 = 255.0;
+const MAX_BASE_STAT_SIZE: f32 = 400.0;
+
+const GREEN_START_STAT: f32 = 0.0;
+const GREEN_STOP_STAT: f32 = 120.0;
+const RED_STOP_STAT: f32 = 60.0;
+const BLUE_START_STAT: f32 = 80.0;
 
 #[derive(Clone, Debug)]
 pub enum Message {
@@ -78,9 +85,7 @@ pub fn update(state: &mut State, message: Message) -> Task<Message> {
 }
 
 pub fn theme(_state: &State) -> Theme {
-    // Theme::Nord
     // Theme::Light
-    // Theme::Dark
     Theme::CatppuccinMacchiato
 }
 
@@ -96,6 +101,7 @@ pub fn view(state: &State) -> Element<'_, Message> {
             rule::vertical(5),
             scrollable(pokemon_sidebar_view(pokemon))
         ]
+        .spacing(10)
         .into();
     } else {
         to_return = to_return.push(default_app_render(&state.pokemons));
@@ -112,8 +118,8 @@ pub fn default_app_render(pokemons: &Pokemons) -> Column<'_, Message> {
             .align_x(Alignment::Start)
             .align_y(Alignment::Center);
 
-        let abilities = compose_ability(&pokemon.abilities).width(260);
-        let stats = compose_stats(&pokemon.stats);
+        let abilities = compose_ability_main_view(&pokemon.abilities).width(260);
+        let stats = compose_stats_main_view(&pokemon.stats);
 
         let row = row![pokemon_name, abilities, stats];
         let button: Button<'_, Message> = button(row)
@@ -135,7 +141,7 @@ pub fn default_app_render(pokemons: &Pokemons) -> Column<'_, Message> {
 }
 
 pub fn pokemon_sidebar_view(pokemon: &Pokemon) -> Column<'_, Message> {
-    let mut to_return = Column::new();
+    let mut to_return = Column::new().spacing(10);
 
     to_return = to_return.push(text(pokemon.name.as_str()).size(40).width(Fill));
 
@@ -153,19 +159,53 @@ pub fn pokemon_sidebar_view(pokemon: &Pokemon) -> Column<'_, Message> {
     }
     to_return = to_return.push(abilities);
 
-    to_return = to_return.push(text("\nBase stats: "));
+    to_return = to_return.push(text("\nBase stats:\n"));
 
-    // 0 => text("HP"),
-    // 1 => text("Atk"),
-    // 2 => text("Def"),
-    // 3 => text("SpA"),
-    // 4 => text("SpD"),
-    // 5 => text("Spe"),
+    for (idx, &val) in pokemon.stats.stats.iter().enumerate() {
+        let mut stat_row = Row::new();
+        stat_row = stat_row.push(
+            match idx {
+                0 => text("HP:"),
+                1 => text("Attack:"),
+                2 => text("Defense:"),
+                3 => text("Sp. Atk:"),
+                4 => text("Sp. Def:"),
+                5 => text("Speed:"),
+                _ => unreachable!(),
+            }
+            .width(100)
+            .align_x(Alignment::End),
+        );
+        let val_string = format!("    {}  ", val);
+        stat_row = stat_row.push(text(val_string).width(80).align_x(Alignment::End));
+        let stat_display_box = container("")
+            .width(val as f32 / MAX_BASE_STAT * MAX_BASE_STAT_SIZE)
+            .style(move |_theme| {
+                container::Style::default().background(Color::from_rgb8(
+                    (255.0 * (1.0 - (val as f32 / (RED_STOP_STAT)))) as u8,
+                    ((255.0 / (GREEN_STOP_STAT - GREEN_START_STAT))
+                        * (val as f32 - GREEN_START_STAT)) as u8,
+                    ((255.0 / (MAX_BASE_STAT - BLUE_START_STAT)) * (val as f32 - BLUE_START_STAT))
+                        as u8,
+                ))
+            });
+        stat_row = stat_row.push(stat_display_box);
+
+        to_return = to_return.push(stat_row);
+    }
+    let base_stat_total_row = Row::new()
+        .push(text("Total:").width(100).align_x(Alignment::End))
+        .push({
+            let val_string = format!("    {}  ", pokemon.stats.stats.iter().sum::<i64>());
+            text(val_string).width(80).align_x(Alignment::End)
+        });
+
+    to_return = to_return.push(base_stat_total_row);
 
     return to_return;
 }
 
-pub fn compose_ability(abilitites: &Vec<Ability>) -> Row<'_, Message, Theme, Renderer> {
+pub fn compose_ability_main_view(abilitites: &Vec<Ability>) -> Row<'_, Message, Theme, Renderer> {
     let mut ability_row: Row<'_, Message, Theme, Renderer> = Row::new();
     ability_row = ability_row.spacing(10);
     if abilitites.len() <= 2 {
@@ -205,7 +245,7 @@ pub fn compose_ability(abilitites: &Vec<Ability>) -> Row<'_, Message, Theme, Ren
     return ability_row;
 }
 
-pub fn compose_stats(stats: &Stats) -> Row<'_, Message, Theme, Renderer> {
+pub fn compose_stats_main_view(stats: &Stats) -> Row<'_, Message, Theme, Renderer> {
     let mut stats_row: Row<'_, Message, Theme, Renderer> = Row::new();
     for (i, &val) in stats.stats.iter().enumerate() {
         let mut indiv_column = Column::new().width(HEIGHT);
